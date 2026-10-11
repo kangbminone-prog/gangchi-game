@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>강치를 지켜라</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+[hidden]{display:none!important}
+/* 레이아웃: 위에 독도 장면(캔버스), 아래에 퀴즈/카드 패널. 막이 바뀌면 아침, 석양, 밤으로 장면이 바뀐다. 단일 다크 룩. */
+:root {
+  --deep: #0a1c2b;
+  --panel: #102a3b;
+  --line: #2a4b60;
+  --foam: #e8f1ed;
+  --mute: #a9bdc9;
+  --sun: #f1b24a;
+  --coral: #ec6a55;
+  --moss: #86bba0;
+  --f-display: 'Black Han Sans', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --f-body: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  color-scheme: dark;
+}
+body {
+  background: var(--deep);
+  color: var(--foam);
+  font-family: var(--f-body);
+  font-size: 16px;
+  line-height: 1.6;
+  padding-inline: 16px;
+  padding-block: 16px 40px;
+}
+.game { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.hud { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.brand { font-family: var(--f-display); font-size: 1.4rem; letter-spacing: .02em; }
+.hudr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.chip { font-size: .85rem; color: var(--mute); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; white-space: nowrap; }
+.chip b { color: var(--foam); font-variant-numeric: tabular-nums; }
+.lives { display: inline-flex; gap: 4px; }
+.lives svg { width: 28px; height: 18px; fill: var(--moss); transition: fill .3s; }
+.lives svg.lost { fill: var(--line); }
+.stage { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #143a52; }
+canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.eyebrow { color: var(--sun); font-size: .8rem; font-weight: 700; letter-spacing: .12em; margin: 0 0 6px; }
+.card h1, .card h2 { font-family: var(--f-display); font-weight: 400; line-height: 1.2; margin: 0 0 10px; text-wrap: balance; }
+.card h1 { font-size: clamp(1.9rem, 6vw, 2.8rem); }
+.card h2 { font-size: clamp(1.5rem, 4.5vw, 2rem); }
+.card p { max-width: 62ch; margin: 0 0 12px; color: var(--foam); }
+.card .sub { color: var(--mute); font-size: .92rem; }
+.rules { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; max-width: 62ch; }
+.rules li { padding-left: 14px; position: relative; }
+.rules li::before { content: ""; position: absolute; left: 0; top: .7em; width: 6px; height: 6px; border-radius: 50%; background: var(--sun); }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0 0 14px; }
+.stats div { min-width: 0; }
+.stats dt { color: var(--mute); font-size: .8rem; }
+.stats dd { margin: 0; font-family: var(--f-display); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.review { margin: 0 0 14px; padding: 0; list-style: none; display: grid; gap: 8px; max-width: 70ch; }
+.review li { font-size: .92rem; color: var(--mute); border-left: 2px solid var(--coral); padding-left: 10px; }
+.review b { color: var(--foam); font-weight: 500; }
+.btn { font: inherit; font-weight: 700; background: var(--sun); color: #1b1405; border: 0; border-radius: 8px; padding: 12px 24px; cursor: pointer; }
+.btn:hover { filter: brightness(1.08); }
+.btn:focus-visible, .opt:focus-visible { outline: 3px solid var(--foam); outline-offset: 2px; }
+.timer { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-bottom: 12px; }
+.timer i { display: block; height: 100%; width: 100%; background: var(--sun); }
+.timer.low i { background: var(--coral); }
+.qmeta { margin: 0 0 4px; color: var(--mute); font-size: .85rem; }
+.q { font-size: 1.2rem; font-weight: 700; line-height: 1.45; margin: 0 0 14px; max-width: 64ch; text-wrap: balance; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.opt { font: inherit; text-align: left; display: flex; gap: 10px; align-items: flex-start; min-width: 0; min-height: 54px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); background: #0d2231; color: var(--foam); cursor: pointer; }
+.opt:hover:not(:disabled) { border-color: var(--sun); }
+.opt .key { flex: none; width: 22px; height: 22px; border-radius: 5px; background: var(--line); color: var(--foam); font-size: .78rem; display: grid; place-items: center; margin-top: 1px; }
+.opt .txt { min-width: 0; overflow-wrap: anywhere; }
+.opt.right { background: rgba(134, 187, 160, .22); border-color: var(--moss); }
+.opt.wrong { border-color: var(--coral); opacity: .55; }
+.opt:disabled { cursor: default; }
+.hint { min-height: 1.5em; margin: 10px 0 0; color: var(--coral); font-size: .92rem; }
+.fb { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.verdict { font-family: var(--f-display); font-size: 1.35rem; margin: 0 0 6px; }
+.verdict.ok { color: var(--moss); }
+.verdict.bad { color: var(--coral); }
+.why { margin: 0 0 14px; max-width: 66ch; color: var(--foam); }
+.foot { color: var(--mute); font-size: .8rem; margin: 0; max-width: 80ch; }
+@media (max-width: 600px) {
+  .opts { grid-template-columns: 1fr; }
+  .panel { padding: 14px; }
+}
+</style>
+</head>
+<body>
+
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sl" viewBox="0 0 28 18"><ellipse cx="12" cy="13" rx="11" ry="4.6"/><ellipse cx="22" cy="7" rx="4" ry="3.4"/><rect x="19" y="8" width="4" height="5" rx="2"/><ellipse cx="3" cy="14" rx="3" ry="1.6"/></symbol>
+</svg>
+
+<main class="game">
+  <header class="hud">
+    <div class="brand">강치를 지켜라</div>
+    <div class="hudr">
+      <span class="chip" id="stageChip">준비</span>
+      <span class="chip">점수 <b id="score">0</b></span>
+      <span class="lives" id="lives" role="img" aria-label="남은 강치"></span>
+    </div>
+  </header>
+
+  <div class="stage">
+    <canvas id="scene" role="img" aria-label="독도 바위섬의 강치들과 다가오는 사냥꾼의 배, 갓을 쓴 안용복"></canvas>
+  </div>
+
+  <section class="panel" id="panel">
+    <div class="card" id="viewCard"></div>
+    <div id="viewQuiz" hidden>
+      <div class="timer" id="timer" aria-hidden="true"><i id="bar"></i></div>
+      <p class="qmeta" id="qmeta"></p>
+      <h2 class="q" id="q"></h2>
+      <div class="opts" id="opts"></div>
+      <p class="hint" id="hint" role="status"></p>
+      <div class="fb" id="fb" hidden aria-live="polite">
+        <p class="verdict" id="verdict"></p>
+        <p class="why" id="why"></p>
+        <button class="btn" id="next" type="button">다음 문제</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot"><b>제작</b> 20301 강보민</p>
+</main>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+
+  /* ---------- 퀴즈 데이터: o[0]이 정답, 표시할 때 섞는다 ---------- */
+  const STAGES = [
+    { name: '안용복의 길', time: 32,
+      intro: '안용복은 1693년 울릉도에서 일본 어부들에게 붙잡혀 일본으로 끌려갔고, 1696년에 다시 일본에 건너가 항의했습니다. 사냥꾼의 배를 막아내세요.',
+      take: '세종실록지리지(1454), 숙종실록의 안용복 진술, 대한제국 칙령 제41호(1900)는 모두 울릉도와 독도에 관한 기록입니다.' },
+    { name: '불타는 얼음', time: 28,
+      intro: '동해 울릉분지 깊은 바다에는 “불타는 얼음”이라 불리는 메탄 하이드레이트가 묻혀 있는 것으로 추정됩니다.',
+      take: '불타는 얼음은 저온·고압의 깊은 바다에서 생기는 천연가스 덩어리입니다. 2007년 동해 울릉분지에서 약 6억 톤으로 추정됐습니다.' },
+    { name: '강치의 기억', time: 24,
+      intro: '독도에는 한때 수만 마리의 강치가 살았습니다. 가죽과 기름을 노린 포획으로 사라진 강치를 이번에는 지켜 주세요.',
+      take: '독도 강치는 1900년대 초 대규모 포획으로 사라졌습니다. 1905~1910년에는 연평균 약 1,300마리가 포획됐습니다.' }
+  ];
+
+  const QUIZ = [
+    { s: 0, q: '독도를 지키려는 의지를 다지는 “독도의 날”은 언제일까요?',
+      o: ['10월 25일', '10월 27일', '8월 15일', '3월 1일'],
+      e: '매년 10월 25일입니다. 1900년 10월 25일 재가된 대한제국 칙령 제41호를 기념하는 날입니다.' },
+    { s: 0, q: '1696년 1월, 에도 막부가 일본 어민들에게 내린 조치는 무엇일까요?',
+      o: ['울릉도 도항 금지', '독도에 관측소 설치', '조선에 사신 파견 요구', '울릉도 개척 허가'],
+      e: '막부는 오야·무라카와 두 가문의 울릉도 도항(항해)을 금지했습니다.' },
+    { s: 0, q: '숙종실록은 안용복이 “송도(松島)는 ○○이며 우리나라 땅”이라고 말했다고 기록합니다. ○○은 무엇일까요?',
+      o: ['자산도(독도)', '대마도', '오키섬', '거문도'],
+      e: '숙종실록에는 안용복이 송도를 자산도, 곧 독도라고 말했다고 적혀 있습니다.' },
+    { s: 0, q: '세종실록지리지(1454)는 우산도·울릉도를 어느 고을 소속으로 적었을까요?',
+      o: ['강원도 울진현', '경상도 동래현', '전라도 흥양현', '함경도 경성군'],
+      e: '세종실록지리지의 강원도 울진현 항목에 우산도와 울릉도가 함께 실려 있습니다.' },
+    { s: 0, q: '1900년 대한제국 칙령 제41호는 울릉도를 울도로 고치고, 책임자를 도감에서 무엇으로 바꾸었을까요?',
+      o: ['군수', '현령', '부사', '관찰사'],
+      e: '1900년 10월 칙령 제41호로 울릉도를 울도로 고치고 도감을 군수로 바꿨습니다.' },
+
+    { s: 1, q: '“불타는 얼음”이라 불리는 물질의 정체는 무엇일까요?',
+      o: ['메탄(가스) 하이드레이트', '드라이아이스', '석탄 가루', '우라늄 광석'],
+      e: '천연가스 성분인 메탄이 저온·고압에서 물과 결합해 만들어진 고체입니다. 불을 붙이면 타서 “불타는 얼음”이라고 부릅니다.' },
+    { s: 1, q: '메탄 하이드레이트는 어떤 환경에서 만들어질까요?',
+      o: ['저온·고압의 심해저나 영구동토', '고온·고압의 화산 지대', '고온·저압의 사막', '진공 상태의 우주'],
+      e: '깊은 바다 밑이나 땅이 얼어 있는 영구동토처럼 온도가 낮고 압력이 높은 곳에서 생깁니다.' },
+    { s: 1, q: '2007년 동해 울릉분지에서 약 6억 톤으로 추정된 가스하이드레이트는, 당시 발표로 우리나라 천연가스 소비량의 약 몇 년분이었을까요?',
+      o: ['약 30년분', '약 3년분', '약 300년분', '1년분 미만'],
+      e: '2007년 발표 당시 약 30년분으로 소개됐습니다. 추정치라서 자료마다 수치가 다릅니다.' },
+    { s: 1, q: '가스하이드레이트 1L에는 천연가스가 대략 얼마나 들어 있다고 알려져 있을까요?',
+      o: ['약 160~200L', '약 2L', '약 20L', '약 20,000L'],
+      e: '자료에 따라 약 164배, 약 200배로 소개됩니다.' },
+    { s: 1, q: '가스하이드레이트 개발에서 환경 면으로 가장 크게 우려되는 점은 무엇일까요?',
+      o: ['메탄이 대량 방출되면 지구온난화가 빨라질 수 있다', '바다가 모두 얼어붙는다', '방사성 물질이 퍼진다', '소음 때문에 고래가 사라진다'],
+      e: '메탄은 온실가스라서 한꺼번에 방출되면 온난화를 가속할 수 있다는 우려가 있습니다.' },
+
+    { s: 2, q: '독도 강치는 어떤 동물일까요?',
+      o: ['바다사자의 한 종류', '물개의 한 종류', '고래의 한 종류', '해달의 한 종류'],
+      e: '강치는 바다사자의 한 종류입니다.' },
+    { s: 2, q: '일본 상인 나카이 요자부로가 독도에서 한 일은 무엇일까요?',
+      o: ['강치잡이 회사를 세워 대량으로 포획했다', '강치 보호 구역을 만들었다', '조선 어부와 함께 등대를 세웠다', '안용복을 구해 주었다'],
+      e: '나카이는 다른 어업가들과 합자회사를 세워 강치를 대량으로 포획했습니다. 목적은 가죽과 기름이었습니다.' },
+    { s: 2, q: '일본이 독도를 시마네현에 편입한다고 고시한 해는 언제일까요?',
+      o: ['1905년', '1696년', '1900년', '1953년'],
+      e: '일본은 1905년 독도를 시마네현에 편입한다고 고시했습니다.' },
+    { s: 2, q: '한국해양수산개발원 발표에 따르면, 1905~1910년 독도 강치는 연평균 약 몇 마리 포획됐을까요?',
+      o: ['약 1,300마리', '약 13마리', '약 130마리', '약 13만 마리'],
+      e: '한국해양수산개발원은 1905~1910년 연평균 약 1,300마리가 포획됐다고 발표했습니다.' },
+    { s: 2, q: '2014년 독도 서도의 굴에서 발견된 동물 뼈를 분석한 결과는 무엇이었을까요?',
+      o: ['독도 강치(바다사자) 뼈로 확인됐다', '고래 뼈로 확인됐다', '공룡 뼈로 확인됐다', '물개 뼈로 확인됐다'],
+      e: '2014년 4월 서도 북쪽 가제굴에서 채취한 뼈가 독도 바다사자 뼈로 확인됐습니다.' }
+  ];
+
+/* ---------- 장면 ---------- */
+  const W = 960, H = 540;
+  const cv = $('#scene'), ctx = cv.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const PAL = [
+    { t: '#1d4a6b', b: '#f2c27b', sun: '#fff1c1', sx: 760, sy: 238, sr: 34, s1: '#2a7090', s2: '#14405a', stars: false },
+    { t: '#1b2f4d', b: '#ea8159', sun: '#ffb877', sx: 790, sy: 262, sr: 40, s1: '#2f4f6e', s2: '#17304a', stars: false },
+    { t: '#060e1a', b: '#1c3a56', sun: '#e9f1f5', sx: 730, sy: 110, sr: 26, s1: '#143049', s2: '#08182a', stars: true }
+  ];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const STARS = Array.from({ length: 46 }, () => ({ x: rnd() * W, y: rnd() * 220, r: 1 + rnd() * 1.6, a: rnd() * 6 }));
+
+  const ROCK_W = [[60,452],[64,372],[150,372],[158,330],[205,330],[215,268],[200,200],[225,150],[250,200],[262,262],[300,300],[330,322],[346,452]];
+  const ROCK_E = [[330,452],[342,358],[398,358],[404,312],[452,312],[458,350],[510,350],[524,452]];
+  const TUFTS = [[170,330],[190,330],[225,152],[420,312],[440,312],[470,350],[490,350],[100,372]];
+  const SL = [
+    { x: 88, y: 372, s: 1 }, { x: 128, y: 372, s: .9 }, { x: 182, y: 330, s: .85 },
+    { x: 368, y: 358, s: 1 }, { x: 488, y: 350, s: .9 }
+  ];
+  const HERO = { x: 428, y: 312 };
+  const BX0 = 1050, BX1 = 612, LANE = 428;
+
+  let S = null;
+  const boats = [], parts = [], pops = [];
+  let shake = 0, flash = 0;
+
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  function wave(t, base, amp, len, speed, phase, fill, crest) {
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 8) ctx.lineTo(x, base + Math.sin(x / len + t * speed + phase) * amp);
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+    if (crest) {
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 8) { const y = base + Math.sin(x / len + t * speed + phase) * amp; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.strokeStyle = crest; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+  function poly(pts) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); }
+
+  function drawRocks() {
+    const g = ctx.createLinearGradient(0, 140, 0, 452); g.addColorStop(0, '#48535c'); g.addColorStop(1, '#222b33');
+    [ROCK_W, ROCK_E].forEach(r => { poly(r); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = '#66737e'; ctx.lineWidth = 2; ctx.stroke(); });
+    ctx.strokeStyle = 'rgba(10,18,24,.45)'; ctx.lineWidth = 2; ctx.beginPath();
+    [[225,150,232,260],[205,330,200,400],[262,262,285,340],[404,312,410,358],[458,350,470,420],[130,380,120,430]].forEach(c => { ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]); });
+    ctx.stroke();
+    ctx.strokeStyle = '#6a9a58'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    TUFTS.forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x - 6, y - 8); ctx.moveTo(x, y); ctx.lineTo(x, y - 11); ctx.moveTo(x + 4, y); ctx.lineTo(x + 7, y - 7); ctx.stroke(); });
+  }
+
+  function drawSL(sl, t, i) {
+    if (sl.fade <= 0) return;
+    ctx.save(); ctx.globalAlpha = sl.fade; ctx.translate(sl.x, sl.y + (1 - sl.fade) * 26); ctx.scale(sl.s, sl.s);
+    const br = Math.sin(t * 2 + i * 1.3) * 1.2;
+    ctx.fillStyle = '#7d5f49'; ctx.beginPath(); ctx.ellipse(0, -14, 28, 13, -.12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#a78a70'; ctx.beginPath(); ctx.ellipse(-2, -8, 22, 6, -.1, 0, 7); ctx.fill();
+    ctx.fillStyle = '#7d5f49'; ctx.beginPath(); ctx.ellipse(22, -30 + br * .4, 8, 13, .3, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(31, -42 + br * .4, 10, 7, -.25, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(40, -44 + br * .4, 6, 3.4, -.2, 0, 7); ctx.fill();
+    ctx.fillStyle = '#10161a'; ctx.beginPath(); ctx.arc(34, -45 + br * .4, 1.8, 0, 7); ctx.fill();
+    ctx.fillStyle = '#634a39'; ctx.beginPath(); ctx.ellipse(12, -6, 11, 4, .6, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-30, -8, 10, 4, -.5, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHero(x, y, ang) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(1.15, 1.15);
+    ctx.save(); ctx.translate(12, -30); ctx.rotate(ang);
+    ctx.strokeStyle = '#8a6240'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 28); ctx.lineTo(0, -54); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#e9e4d6'; ctx.beginPath(); ctx.moveTo(-14, -34); ctx.lineTo(14, -34); ctx.lineTo(19, 0); ctx.lineTo(-19, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2f5d7c'; ctx.fillRect(-14, -22, 28, 4);
+    ctx.fillStyle = '#e0b48a'; ctx.beginPath(); ctx.arc(0, -44, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = '#16130f'; ctx.fillRect(-8, -62, 16, 11);
+    ctx.beginPath(); ctx.ellipse(0, -62, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -50, 19, 5, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  function hunter(x, club) {
+    ctx.save(); ctx.translate(x, -8);
+    ctx.fillStyle = '#4d5b45'; ctx.fillRect(-9, -34, 18, 34);
+    ctx.fillStyle = '#d5a47c'; ctx.beginPath(); ctx.arc(0, -42, 8, 0, 7); ctx.fill();
+    ctx.fillStyle = '#c8a45b'; ctx.beginPath(); ctx.moveTo(-17, -46); ctx.lineTo(17, -46); ctx.lineTo(0, -64); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#2c2118'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(9, -26); ctx.lineTo(club ? 26 : 22, club ? -52 : -40); ctx.stroke();
+    ctx.restore();
+  }
+  function drawBoat(b, t) {
+    ctx.save(); ctx.globalAlpha = Math.max(0, b.alpha); ctx.translate(b.x, b.y + Math.sin(t * 3 + b.seed) * 2); ctx.rotate(b.rot);
+    ctx.fillStyle = '#4a3324'; ctx.beginPath(); ctx.moveTo(-78, -6); ctx.lineTo(78, -6); ctx.lineTo(60, 26); ctx.lineTo(-58, 26); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#6b4a33'; ctx.fillRect(-78, -10, 156, 6);
+    ctx.strokeStyle = '#33261b'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(30, -10); ctx.lineTo(30, -90); ctx.stroke();
+    ctx.fillStyle = '#b9b09a'; ctx.beginPath(); ctx.moveTo(33, -88); ctx.lineTo(33, -26); ctx.lineTo(70, -32); ctx.closePath(); ctx.fill();
+    hunter(-44, true); hunter(-10, false);
+    ctx.restore();
+  }
+
+  function draw(t) {
+    const vis = S ? S.vis : 0, P = PAL[vis];
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random() - .5) * shake * 20, (Math.random() - .5) * shake * 20);
+    let g = ctx.createLinearGradient(0, 0, 0, 270); g.addColorStop(0, P.t); g.addColorStop(1, P.b);
+    ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, 290);
+    if (P.stars) { ctx.fillStyle = '#dfe9f0'; STARS.forEach(s => { ctx.globalAlpha = .35 + .65 * Math.abs(Math.sin(t * .8 + s.a)); ctx.fillRect(s.x, s.y, s.r, s.r); }); ctx.globalAlpha = 1; }
+    const glow = ctx.createRadialGradient(P.sx, P.sy, 4, P.sx, P.sy, P.sr * 3.2);
+    glow.addColorStop(0, P.sun); glow.addColorStop(.25, P.sun); glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.globalAlpha = .55; ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(P.sx, P.sy, P.sr * 3.2, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = P.sun; ctx.beginPath(); ctx.arc(P.sx, P.sy, P.sr, 0, 7); ctx.fill();
+    g = ctx.createLinearGradient(0, 270, 0, H); g.addColorStop(0, P.s1); g.addColorStop(1, P.s2);
+    ctx.fillStyle = g; ctx.fillRect(-20, 270, W + 40, H);
+    const ws = calm ? .25 : 1;
+    wave(t, 318, 3, 46, 1.1 * ws, 0, 'rgba(255,255,255,.05)', 'rgba(255,255,255,.18)');
+    wave(t, 372, 4, 70, -.9 * ws, 2, 'rgba(255,255,255,.04)', 'rgba(255,255,255,.14)');
+    drawRocks();
+    SL.forEach((s, i) => drawSL(s, t, i));
+    let hx = HERO.x, hy = HERO.y, ang = -.35;
+    if (S && S.strike) {
+      const u = Math.min(S.strike.t / .55, 1), k = Math.sin(Math.PI * u);
+      hx += (S.strike.tx - HERO.x) * k; hy += (S.strike.ty - HERO.y) * k;
+      ang = -.9 + 2.2 * Math.min(1, Math.max(0, (u - .2) / .3));
+    }
+    drawHero(hx, hy, ang);
+    boats.forEach(b => drawBoat(b, t));
+    wave(t, 446, 5, 58, 1.5 * ws, 1, 'rgba(8,24,36,.72)', 'rgba(255,255,255,.35)');
+    parts.forEach(p => { ctx.globalAlpha = Math.max(0, p.life * 1.6); ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill(); });
+    ctx.globalAlpha = 1;
+    pops.forEach(p => {
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - p.t / .9); ctx.font = "64px 'Black Han Sans', sans-serif"; ctx.textAlign = 'center';
+      ctx.lineWidth = 8; ctx.strokeStyle = '#10161a'; ctx.strokeText(p.w, p.x, p.y - p.t * 60);
+      ctx.fillStyle = '#f1b24a'; ctx.fillText(p.w, p.x, p.y - p.t * 60); ctx.restore();
+    });
+    if (S && S.mode === 'ask' && S.p > .55) {
+      const a = Math.min(.4, (S.p - .55) / .45 * .4);
+      const v = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95);
+      v.addColorStop(0, 'rgba(236,106,85,0)'); v.addColorStop(1, 'rgba(236,106,85,' + a + ')');
+      ctx.fillStyle = v; ctx.fillRect(-20, -20, W + 40, H + 40);
+    }
+    if (flash > 0) { ctx.fillStyle = 'rgba(236,106,85,' + flash * .5 + ')'; ctx.fillRect(-20, -20, W + 40, H + 40); }
+    ctx.restore();
+  }
+
+  /* ---------- 진행 ---------- */
+  function burst(x, y) {
+    for (let i = 0; i < 16; i++) { const a = Math.random() * 6.28, v = 120 + Math.random() * 260;
+      parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, r: 2 + Math.random() * 3, life: .7, c: Math.random() < .5 ? '#f1b24a' : '#e8f1ed' }); }
+  }
+  function update(dt) {
+    if (shake > 0) shake = Math.max(0, shake - dt * 2.2);
+    if (flash > 0) flash = Math.max(0, flash - dt * 2.4);
+    if (S && S.mode === 'ask') {
+      S.p += dt / S.dur; S.boat.p = Math.min(S.p, 1);
+      $('#bar').style.width = Math.max(0, (1 - S.p) * 100) + '%';
+      $('#timer').classList.toggle('low', S.p > .7);
+      if (S.p >= 1) timeout();
+    }
+    boats.forEach(b => {
+      b.t += dt;
+      if (b.state === 'sail') { b.x = BX0 - (BX0 - BX1) * Math.min(b.p, 1); b.y = LANE; }
+      else if (b.state === 'attack') { b.x = BX1 + Math.sin(b.t * 40) * 3; if (b.t > .8) { b.state = 'retreat'; } }
+      else if (b.state === 'retreat') { b.x += 240 * dt; b.alpha -= dt * 1.1; }
+      else if (b.state === 'flying') { b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 900 * dt; b.rot += dt * 7; b.alpha -= dt * .7; }
+    });
+    for (let i = boats.length - 1; i >= 0; i--) if (boats[i].alpha <= 0 || boats[i].y > 700) boats.splice(i, 1);
+    for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 700 * dt; p.life -= dt; if (p.life <= 0) parts.splice(i, 1); }
+    for (let i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > .9) pops.splice(i, 1); }
+    SL.forEach(s => { if (s.dying) { s.fade = Math.max(0, s.fade - dt * 1.3); } });
+    if (S && S.strike) {
+      const st = S.strike; st.t += dt;
+      if (!st.hit && st.t >= .22) {
+        st.hit = true; const b = st.boat; b.state = 'flying'; b.vx = 520; b.vy = -430;
+        burst(b.x, b.y - 20); shake = calm ? .1 : .35;
+        pops.push({ w: ['퍽!', '쾅!', '철썩!'][Math.floor(Math.random() * 3)], x: b.x - 20, y: b.y - 60, t: 0 });
+      }
+      if (st.t > .6) S.strike = null;
+    }
+  }
+
+  let last = 0;
+  function frame(now) {
+    const t = now / 1000; const dt = Math.min(.05, last ? t - last : 0); last = t;
+    update(dt); draw(t); requestAnimationFrame(frame);
+  }
+
+  /* ---------- UI ---------- */
+  const card = $('#viewCard'), quiz = $('#viewQuiz'), optsEl = $('#opts'), fb = $('#fb'), hint = $('#hint');
+  function showCard(html) { quiz.hidden = true; card.hidden = false; card.innerHTML = html; const b = card.querySelector('.btn'); if (b) b.focus({ preventScroll: true }); }
+  function hud() {
+    $('#score').textContent = S.score;
+    const l = $('#lives'); l.innerHTML = '';
+    for (let i = 0; i < 5; i++) l.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 28 18" class="' + (i < S.lives ? '' : 'lost') + '"><use href="#sl"/></svg>');
+    l.setAttribute('aria-label', '남은 강치 ' + S.lives + '마리');
+  }
+  function reset() {
+    S = { mode: 'title', vis: 0, qi: 0, lives: 5, score: 0, combo: 0, clean: 0, missed: [], p: 0, dur: 30, cur: null, order: [], tried: new Set(), boat: null, strike: null };
+    SL.forEach(s => { s.fade = 1; s.dying = false; });
+    boats.length = 0; hud(); $('#stageChip').textContent = '준비';
+  }
+
+  function title() {
+    reset();
+    showCard('<p class="eyebrow">독도 퀴즈 디펜스</p><h1>강치를 지켜라</h1>' +
+      '<p>독도에는 한때 수만 마리의 강치가 살았습니다. 안용복과 함께 사냥꾼의 배를 막아 강치를 지켜 주세요.</p>' +
+      '<ul class="rules"><li>정답을 고르면 안용복이 배를 쳐냅니다.</li><li>오답을 고르면 배가 한 걸음 더 다가옵니다.</li><li>배가 바위섬에 닿으면 강치 한 마리를 잃습니다. 5마리를 모두 잃으면 끝나요.</li><li>숫자키 1~4로도 고를 수 있어요. 총 15문제, 3막입니다.</li></ul>' +
+      '<button class="btn" type="button" id="go">게임 시작</button>' +
+      '<p class="sub" style="margin-top:14px">제작 20301 강보민</p>');
+    $('#go').onclick = () => stageIntro(0);
+  }
+  function stageIntro(i) {
+    S.mode = 'intro'; S.vis = i; const st = STAGES[i];
+    $('#stageChip').textContent = (i + 1) + '막 · ' + st.name;
+    showCard('<p class="eyebrow">' + (i + 1) + '막</p><h2>' + st.name + '</h2><p>' + st.intro + '</p><button class="btn" type="button" id="go">출발</button>');
+    $('#go').onclick = ask;
+  }
+  function stageEnd(i) {
+    S.mode = 'end'; const last = i === STAGES.length - 1;
+    showCard('<p class="eyebrow">' + (i + 1) + '막 마무리</p><h2>' + STAGES[i].name + ' 끝</h2><p>' + STAGES[i].take + '</p><button class="btn" type="button" id="go">' + (last ? '결과 보기' : '다음 막으로') + '</button>');
+    $('#go').onclick = () => last ? result(true) : stageIntro(i + 1);
+  }
+
+  function ask() {
+    const q = QUIZ[S.qi]; S.cur = q; S.mode = 'ask'; S.vis = q.s; S.p = 0; S.dur = STAGES[q.s].time;
+    S.tried = new Set(); S.order = shuffle([0, 1, 2, 3]);
+    const inStage = QUIZ.filter(x => x.s === q.s), n = inStage.indexOf(q) + 1;
+    $('#stageChip').textContent = (q.s + 1) + '막 · ' + STAGES[q.s].name;
+    $('#qmeta').textContent = '문제 ' + n + ' / ' + inStage.length + ' (전체 ' + (S.qi + 1) + ' / ' + QUIZ.length + ')';
+    $('#q').textContent = q.q;
+    optsEl.innerHTML = '';
+    S.order.forEach((oi, k) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'opt';
+      b.innerHTML = '<span class="key">' + (k + 1) + '</span><span class="txt"></span>';
+      b.querySelector('.txt').textContent = q.o[oi]; b.onclick = () => choose(k, b); optsEl.appendChild(b);
+    });
+    hint.textContent = ''; fb.hidden = true; card.hidden = true; quiz.hidden = false;
+    $('#bar').style.width = '100%'; $('#timer').classList.remove('low');
+    const boat = { state: 'sail', x: BX0, y: LANE, rot: 0, alpha: 1, p: 0, t: 0, seed: Math.random() * 10 };
+    boats.push(boat); S.boat = boat;
+  }
+
+  function lockAll() { [...optsEl.children].forEach(b => { b.disabled = true; }); }
+  function markRight() { [...optsEl.children].forEach((b, k) => { if (S.order[k] === 0) b.classList.add('right'); }); }
+  function feedback(ok, text) {
+    const v = $('#verdict'); v.textContent = text; v.className = 'verdict ' + (ok ? 'ok' : 'bad');
+    $('#why').textContent = S.cur.e; fb.hidden = false; hint.textContent = '';
+    const nb = $('#next'); nb.textContent = S.qi === QUIZ.length - 1 ? '마무리' : '다음 문제'; nb.focus({ preventScroll: true });
+  }
+
+  function choose(k, b) {
+    if (S.mode !== 'ask' || b.disabled) return;
+    if (S.order[k] === 0) correct(b); else wrong(k, b);
+  }
+  function wrong(k, b) {
+    b.disabled = true; b.classList.add('wrong'); S.tried.add(k); S.combo = 0;
+    S.p = Math.min(.97, S.p + .16); hint.textContent = '아니에요. 배가 가까워졌어요. 다시 골라 보세요.'; shake = calm ? .05 : .15;
+  }
+  function correct(b) {
+    const first = S.tried.size === 0;
+    lockAll(); b.classList.add('right'); S.mode = 'explain';
+    let gain = 50;
+    if (first) { S.combo++; S.clean++; gain = 100 + Math.round((1 - S.p) * 50) + Math.min(S.combo - 1, 5) * 10; }
+    S.score += gain;
+    if (!first) S.missed.push({ q: S.cur.q, a: S.cur.o[0] });
+    S.strike = { t: 0, hit: false, boat: S.boat, tx: S.boat.x - 80, ty: S.boat.y - 14 };
+    hud(); feedback(true, first ? '정답! +' + gain + '점' : '정답! 사냥꾼을 막아냈어요 +' + gain + '점');
+  }
+  function timeout() {
+    lockAll(); markRight(); S.mode = 'explain'; S.lives--; S.combo = 0;
+    const s = SL[S.lives]; if (s) s.dying = true;
+    S.boat.state = 'attack'; S.boat.t = 0; shake = calm ? .1 : .45; flash = .7;
+    S.missed.push({ q: S.cur.q, a: S.cur.o[0] });
+    hud(); feedback(false, S.lives > 0 ? '시간 초과! 강치를 한 마리 잃었어요' : '강치를 모두 잃었어요');
+  }
+  $('#next').onclick = () => {
+    if (S.mode !== 'explain') return;
+    if (S.lives <= 0) return result(false);
+    const prev = QUIZ[S.qi]; S.qi++;
+    if (S.qi >= QUIZ.length || QUIZ[S.qi].s !== prev.s) stageEnd(prev.s); else ask();
+  };
+
+  function result(win) {
+    S.mode = 'result'; quiz.hidden = true;
+    const rank = !win ? '다음에는 꼭 지켜 줘요' : S.lives === 5 ? '독도 강치 수호대장' : S.lives >= 3 ? '독도 강치 수호대원' : '견습 수호대원';
+    let h = '<p class="eyebrow">' + (win ? '결과' : '게임 오버') + '</p><h2>' + (win ? rank : '강치를 지키지 못했어요') + '</h2>';
+    h += '<p>' + (win ? '15문제를 모두 마쳤습니다.' : '강치를 모두 잃었습니다. 틀린 문제를 확인하고 다시 도전해 보세요.') + '</p>';
+    h += '<dl class="stats"><div><dt>점수</dt><dd>' + S.score + '</dd></div><div><dt>지킨 강치</dt><dd>' + S.lives + ' / 5</dd></div><div><dt>한 번에 맞힌 문제</dt><dd>' + S.clean + '</dd></div></dl>';
+    if (S.missed.length) {
+      h += '<p class="eyebrow">다시 볼 문제</p><ul class="review">';
+      S.missed.forEach(m => { h += '<li>' + m.q + '<br><b>정답: ' + m.a + '</b></li>'; });
+      h += '</ul>';
+    }
+    h += '<button class="btn" type="button" id="go">다시 하기</button>';
+    showCard(h); $('#go').onclick = title;
+  }
+
+  document.addEventListener('keydown', e => {
+    if (!S || S.mode !== 'ask') return;
+    const n = Number(e.key);
+    if (n >= 1 && n <= 4) { const b = optsEl.children[n - 1]; if (b && !b.disabled) b.click(); }
+  });
+
+  title();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
